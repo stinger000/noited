@@ -27,10 +27,11 @@ const blobToSession = async (blob) => {
 
   const x = Number(stats?.['@_death_pos.x'])
   const y = Number(stats?.['@_death_pos.y'])
+  const killedBy = stats?.['@_killed_by']
 
-  if (!x || !y) return null
+  if (!x || !y || !killedBy) return null
 
-  return { x, y }
+  return { x, y, killedBy }
 }
 
 const isStatsXml = (blob) =>
@@ -38,20 +39,31 @@ const isStatsXml = (blob) =>
 
 function App () {
   const canvasEl = useRef(null)
-
   const [sessions, setSessions] = useState(null)
+  const [killedByStats, setKilledByStats] = useState({})
 
   const pickDirectory = useCallback(
     async () => {
-      const dirContents = await directoryOpen({ recursive: false })
-      const parsedSessions = await Promise.all(
-        dirContents
-          .filter(isStatsXml)
-          .map(blobToSession)
-      )
-      setSessions(
-        parsedSessions.filter(Boolean)
-      )
+      try {
+        const dirContents = await directoryOpen({ recursive: false })
+        const parsedSessions = await Promise.all(
+          dirContents
+            .filter(isStatsXml)
+            .map(blobToSession)
+        )
+        const validSessions = parsedSessions.filter(Boolean)
+
+        const stats = validSessions.reduce((acc, session) => {
+          const { killedBy } = session
+          acc[killedBy] = (acc[killedBy] || 0) + 1
+          return acc
+        }, {})
+
+        setSessions(validSessions)
+        setKilledByStats(stats)
+      } catch (error) {
+        console.error('Error processing directory:', error)
+      }
     },
     []
   )
@@ -87,7 +99,21 @@ function App () {
         ctx.stroke()
       }
     }
+    mapImg.onerror = () => {
+      console.error('Failed to load map image')
+    }
   }, [sessions])
+
+  const sortedStats = Object.entries(killedByStats).sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1]
+    return a[0].localeCompare(b[0])
+  })
+
+
+  const formatKilledBy = (killedBy) => {
+    const cleaned = killedBy.replace(/^[\s|]+/, '')
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
+  }
 
   return (
     <>
@@ -103,6 +129,23 @@ function App () {
           height={HEIGHT}
         />
       </div>
+
+      <section id="stats" style={{ marginTop: '20px' }}>
+        <h3>Death Reason Statistics</h3>
+        <div id="stats-content" style={{ fontSize: '16px' }}>
+          {sortedStats.length > 0 ? (
+            <ul style={{ listStyleType: 'none', padding: 0 }}>
+              {sortedStats.map(([killedBy, count]) => (
+                <li key={killedBy} style={{ marginBottom: '8px' }}>
+                  {formatKilledBy(killedBy)}: {count}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No statistics available yet...</p>
+          )}
+        </div>
+      </section>
     </>
   )
 }
