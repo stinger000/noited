@@ -41,6 +41,7 @@ function App () {
   const canvasEl = useRef(null)
   const [sessions, setSessions] = useState(null)
   const [killedByStats, setKilledByStats] = useState({})
+  const [isMapLoaded, setIsMapLoaded] = useState(false)
 
   const pickDirectory = useCallback(
     async () => {
@@ -70,6 +71,7 @@ function App () {
 
   useEffect(() => {
     if (!canvasEl.current || !sessions) {
+      setIsMapLoaded(false)
       return
     }
 
@@ -98,17 +100,30 @@ function App () {
         ctx.fill()
         ctx.stroke()
       }
+      setIsMapLoaded(true)
     }
     mapImg.onerror = () => {
       console.error('Failed to load map image')
+      setIsMapLoaded(false)
     }
   }, [sessions])
+
+  const handleDownload = () => {
+    if (!canvasEl.current) return
+
+    const dataUrl = canvasEl.current.toDataURL('image/png')
+    const link = document.createElement('a')
+    link.href = dataUrl
+    link.download = 'noita_map.png'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   const sortedStats = Object.entries(killedByStats).sort((a, b) => {
     if (b[1] !== a[1]) return b[1] - a[1]
     return a[0].localeCompare(b[0])
   })
-
 
   const formatKilledBy = (killedBy) => {
     const cleaned = killedBy.replace(/^[\s|]+/, '')
@@ -129,6 +144,10 @@ function App () {
           height={HEIGHT}
         />
       </div>
+
+      {isMapLoaded && (
+        <button onClick={handleDownload}>Download</button>
+      )}
 
       <section id="stats" style={{ marginTop: '20px' }}>
         <h3>Death Reason Statistics</h3>
